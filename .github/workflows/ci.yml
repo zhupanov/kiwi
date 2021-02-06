@@ -1,0 +1,49 @@
+name: CI
+
+on: push
+
+jobs:
+  shellcheck:
+    name: "shellcheck"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: "Install shellcheck"
+        run: |
+          sudo apt-get install -y shellcheck
+          shellcheck --version
+      - name: "shellcheck bin/*.sh sql/*.sh"
+        run: |
+          shellcheck bin/*.sh sql/*.sh
+
+  Python_Lint:
+    name: "Python Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.9
+      - name: "Install Dependencies"
+        run: |
+          bin/setup_dependencies.sh
+      - name: "Lint and MyPy"
+        run: |
+          bin/lint_all_python.sh
+
+  Python_Tests:
+    name: "Python Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.9
+      - name: "Install Dependencies"
+        run: |
+          bin/setup_dependencies.sh
+      - name: "Test with unittest (pyunit)"
+        run: |
+          bin/run_python_unit_tests.sh
