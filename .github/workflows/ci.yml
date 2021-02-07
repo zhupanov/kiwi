@@ -12,9 +12,9 @@ jobs:
         run: |
           sudo apt-get install -y shellcheck
           shellcheck --version
-      - name: "shellcheck bin/*.sh"
+      - name: "shellcheck --shell=bash bin/*.sh"
         run: |
-          shellcheck bin/*.sh
+          shellcheck --shell=bash bin/*.sh
 
   Python_Lint:
     name: "Python Lint"
