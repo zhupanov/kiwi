@@ -25,7 +25,8 @@ group_count = 0
 videos_count = 0
 
 
-def mod_time(f): return f.lstat().st_mtime
+def mod_time(f):
+    return f.lstat().st_mtime
 
 
 def partition_into_groups(file_names):
@@ -90,7 +91,7 @@ def gen_haloed(image, radius):
 
 def gen_usm(image, percent, radius, threshold, iterations):
     result = image
-    for usm_count in range(iterations):
+    for _ in range(iterations):
         result = result.filter(ImageFilter.UnsharpMask(percent=percent, radius=radius, threshold=threshold))
     return result
 
@@ -173,7 +174,7 @@ def combine_images(args, images, next_group_first, output_dirs, stem, first_path
 
     halo_150 = gen_haloed(first, 150)
 
-    r, g, b = first.split()
+    r, g, _ = first.split()
     r_diff_g = ImageChops.difference(r, g)
     if args.channels:
         save(r_diff_g, output_dirs['channels'], stem, 'r_dif_g', first_path)
@@ -198,10 +199,9 @@ def combine_images(args, images, next_group_first, output_dirs, stem, first_path
         def f2(x):
             if x < 85:
                 return 3 * x
-            elif x < 170:
+            if x < 170:
                 return (-3) * (x - 170)
-            else:
-                return 3 * (x - 170)
+            return 3 * (x - 170)
 
         save(Image.eval(first, f2), output_dirs['eval'], stem, 'eval_first_zigzag', first_path)
         if len(images) > 1:
@@ -224,7 +224,7 @@ def process_group(i, groups, args, output_dirs):
             stem=group[0].stem,
             first_path=group[0])
 
-    except Exception as e:
+    except (ValueError, Exception) as e:
         return i, len(group), round(time.time() - start), e
 
     return i, len(group), round(time.time() - start), None
@@ -253,6 +253,7 @@ def extract_first_image_as_pillow_from_video(video):  # video: path to video fil
     vc = cv2.VideoCapture(str(video))
     try:
         success, numpy_ndarray = vc.read()
+        assert success
         return numpy_ndarray_to_pillow_image(numpy_ndarray)
     finally:
         vc.release()
@@ -275,7 +276,7 @@ def process_video(i, videos, args, output_dirs):
             output_dirs=output_dirs,
             stem=video.stem)
 
-    except Exception as e:
+    except (ValueError, Exception) as e:
         return i, len(images), round(time.time() - start), e
 
     return i, len(images), round(time.time() - start), None
@@ -346,7 +347,7 @@ def parse_args():
         args.eval = True
         args.usm = True
         args.channels = True
-    assert(args.max_frames > 0)
+    assert args.max_frames > 0
     return args
 
 
