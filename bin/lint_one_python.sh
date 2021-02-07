@@ -27,6 +27,7 @@ fi
 echo "--------------------------------------------------------------------------------------------------------"
 echo "=== Running MyPy check of $python_script"
 python3 -m mypy \
+  --follow-imports=silent \
   --strict \
   --ignore-missing-imports \
   --disallow-untyped-defs \
