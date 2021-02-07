@@ -1,7 +1,9 @@
 import time
-from pathlib import Path
+import pathlib
 import argparse
 import multiprocessing
+from typing import List
+
 from PIL import Image, ImageChops, ImageOps, ImageFilter
 import piexif
 import cv2
@@ -24,13 +26,13 @@ group_count = 0
 videos_count = 0
 
 
-def mod_time(f):
+def mod_time(f: str) -> int:
     return f.lstat().st_mtime
 
 
-def partition_into_groups(file_names):
-    groups = [[file_names[0]]]  # groups is list of lists, each representing a group
-    current_group = 0
+def partition_into_groups(file_names: List[pathlib.Path]) -> List[List[pathlib.Path]]:
+    groups: List[List[pathlib.Path]] = [[file_names[0]]]
+    current_group: int = 0
     for file in file_names[1:]:
         if abs(mod_time(file) - mod_time(groups[current_group][-1])) <= DELTA:
             groups[current_group].append(file)
@@ -43,63 +45,63 @@ def partition_into_groups(file_names):
 # Processing a Group ======================================================================
 
 
-def save(image, base, stem, kind, first_path=None):
+def save(image: PIL.Image, base: str, stem: str, kind: str, first_path=None) -> None:
     out_path = base.joinpath(stem + '_' + kind + '.JPG')
     ImageOps.autocontrast(image, cutoff=0.1).save(out_path)
     if first_path is not None:
         piexif.transplant(str(first_path), str(out_path))  # use EXIF from first_path image
 
 
-def save_mono(image, base, stem, kind, first_path):
+def save_mono(image: PIL.Image, base: str, stem: str, kind: str, first_path) -> None:
     save(ImageOps.grayscale(image), base, stem, kind + '_bw', first_path)
 
 
-def save_color_and_mono(image, base, stem, kind, first_path):
+def save_color_and_mono(image: PIL.Image, base: str, stem: str, kind: str, first_path) -> None:
     save(image, base, stem, kind, first_path)
     save_mono(image, base, stem, kind, first_path)
 
 
-def gen_average(images):
-    result = images[0]
+def gen_average(images: List[PIL.Image]) -> PIL.Image:
+    result: PIL.Image = images[0]
     for i, image in enumerate(images[1:]):
-        alpha = 1.0 / float(i+2)
+        alpha: float = 1.0 / float(i+2)
         result = ImageChops.blend(result, image, alpha)
     return result
 
 
-def gen_darker(images):
-    result = images[0]
+def gen_darker(images: List[PIL.Image]) -> PIL.Image:
+    result: PIL.Image = images[0]
     for image in images[1:]:
         result = ImageChops.darker(result, image)
     return result
 
 
-def gen_lighter(images):
-    result = images[0]
+def gen_lighter(images: List[PIL.Image]) -> PIL.Image:
+    result: PIL.Image = images[0]
     for image in images[1:]:
         result = ImageChops.lighter(result, image)
     return result
 
 
-def gen_haloed(image, radius):
-    blurred = image.filter(ImageFilter.GaussianBlur(radius))
-    result = ImageChops.subtract(image, blurred)
+def gen_haloed(image: PIL.Image, radius: int) -> PIL.Image:
+    blurred: PIL.Image = image.filter(ImageFilter.GaussianBlur(radius))
+    result: PIL.Image = ImageChops.subtract(image, blurred)
     blurred.close()
     return result
 
 
-def gen_usm(image, percent, radius, threshold, iterations):
-    result = image
+def gen_usm(image, percent: int, radius: int, threshold: int, iterations: int) -> PIL.Image:
+    result: PIL.Image = image
     for _ in range(iterations):
         result = result.filter(ImageFilter.UnsharpMask(percent=percent, radius=radius, threshold=threshold))
     return result
 
 
 # images: list of PIL.Image; next_group_image: PIL.Image
-def combine_images(args, images, next_group_first, output_dirs, stem, first_path=None):
-    first = images[0]
-    middle = images[len(images) // 2]
-    last = images[-1]
+def combine_images(args, images: List[PIL.Image], next_group_first: PIL.Image, output_dirs: List[str], stem: str, first_path=None) -> None:
+    first: PIL.Image = images[0]
+    middle: PIL.Image = images[len(images) // 2]
+    last: PIL.Image = images[-1]
 
     save(first, output_dirs['original'], stem, '1_first', first_path)
     if middle != first:
@@ -223,7 +225,7 @@ def process_group(i, groups, args, output_dirs):
             stem=group[0].stem,
             first_path=group[0])
 
-    except (ValueError, Exception) as e:
+    except (ValueError, Exception) as e:  # pylint: disable=W0703
         return i, len(group), round(time.time() - start), e
 
     return i, len(group), round(time.time() - start), None
@@ -276,7 +278,7 @@ def process_video(i, videos, args, output_dirs):
             output_dirs=output_dirs,
             stem=video.stem)
 
-    except (ValueError, Exception) as e:
+    except (ValueError, Exception) as e:  # pylint: disable=W0703
         return i, len(images), round(time.time() - start), e
 
     return i, len(images), round(time.time() - start), None
@@ -293,7 +295,7 @@ def report_group(x):
           (i, n, duration, 'SUCCESS' if not e else str(e), group_count))
 
 
-def process_groups_in_parallel(cores, groups_list, args, output_dirs):
+def process_groups_in_parallel(cores: int, groups_list: List[List[pathlib.Path]], args: argparse.Namespace, output_dirs: Dict[str, pathlib.Path]) -> None:
     pool = multiprocessing.Pool(cores)
     for i in range(len(groups_list)):
         pool.apply_async(process_group, (i, groups, args, output_dirs), callback=report_group)
@@ -320,8 +322,8 @@ def process_videos_in_parallel(cores, videos_list, args, output_dirs):
 # Main Auxiliaries ==========================================================================
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description='Combine groups of images for Multiple Exposure techniques.')
+def parse_args() -> argparse.Namespace:
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(description='Combine groups of images for Multiple Exposure techniques.')
     parser.add_argument('-i', '--in', dest='input_dir', action='store', required=True,
                         help='root directory containing input groups of images')
     parser.add_argument('-o', '--out', dest='output_dir', action='store', required=True,
@@ -338,7 +340,7 @@ def parse_args():
     parser.add_argument('--max_frames', action="store", dest="max_frames", type=int,
                         help='max frames (>= 1) to extract from each video', default=100)
 
-    args = parser.parse_args()
+    args: argparse.Namespace = parser.parse_args()
     args.original = True  # we always generate "original", unconditionally
     if args.all:
         args.basic = True
@@ -351,10 +353,10 @@ def parse_args():
     return args
 
 
-def create_output_dirs(args):
-    output_path = Path(args.output_dir)
+def create_output_dirs(args: argparse.Namespace) -> Dict[str, pathlib.Path]:
+    output_path: pathlib.Path = pathlib.Path(args.output_dir)
     output_path.mkdir(exist_ok=True)
-    output_dirs = dict()
+    output_dirs: Dict[str, pathlib.Path] = dict()
     for c in CLASSES:
         if args.__getattribute__(c):
             output_dirs[c] = output_path.joinpath(c)
@@ -366,19 +368,19 @@ def create_output_dirs(args):
 
 
 if __name__ == '__main__':
-    start = time.time()
-    args = parse_args()
-    base = Path(args.input_dir)
-    file_names = [pth for pth in base.glob('**/*.*') if pth.is_file() and pth.suffix.upper() in JPEG_EXTENSIONS]
-    video_names = [pth for pth in base.glob('**/*.*') if pth.is_file() and pth.suffix.upper() in VIDEO_EXTENSIONS]
-    groups = partition_into_groups(file_names) if len(file_names) > 0 else list()
-    group_count = len(groups)
-    videos_count = len(video_names)
-    cores = multiprocessing.cpu_count() // 2
+    start: float = time.time()
+    args: argparse.Namespace = parse_args()
+    base = pathlib.Path(args.input_dir)
+    file_names: List[pathlib.Path] = [pth for pth in base.glob('**/*.*') if pth.is_file() and pth.suffix.upper() in JPEG_EXTENSIONS]
+    video_names: List[pathlib.Path] = [pth for pth in base.glob('**/*.*') if pth.is_file() and pth.suffix.upper() in VIDEO_EXTENSIONS]
+    groups: List[List[pathlib.Path]] = partition_into_groups(file_names) if len(file_names) > 0 else list()
+    group_count: int = len(groups)
+    videos_count: int = len(video_names)
+    cores: int = multiprocessing.cpu_count() // 2
     if group_count > 0:
         print("Found " + str(len(file_names)) + " files under " + str(base) + " and partitioned them into " +
               str(group_count) + " groups")
-        output_dirs = create_output_dirs(args)
+        output_dirs: Dict[str, pathlib.Path] = create_output_dirs(args)
         print("Requested image classes: " + str(sorted(set(output_dirs.keys()))))
         print("Processing using %s slave sub-processes." % cores)
         print('---------------------------------------------------------------------------------------')
@@ -390,8 +392,8 @@ if __name__ == '__main__':
         print('Total images processing time: %d seconds.' % round(time.time() - start))
 
     if videos_count > 0:
-        start = time.time()
-        output_dirs = create_output_dirs(args)
+        start: float = time.time()
+        output_dirs: Dict[str, pathlib.Path] = create_output_dirs(args)
         print('=======================================================================================')
         print("Found " + str(len(video_names)) + " videos under " + str(base))
         print("Requested image classes: " + str(sorted(set(output_dirs.keys()))))

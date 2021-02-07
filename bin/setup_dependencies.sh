@@ -7,13 +7,10 @@ cd "$project_dir"
 
 echo "Installing python dependencies"
 
-# Install Python libraries required in prod
-python3 -m pip install --no-cache-dir --requirement "$project_dir/requirements.txt"
-
 # Install Python libraries required in dev environment (linters, etc.)
 python3 -m pip install --no-cache-dir --requirement "$project_dir/requirements_dev.txt"
 
-ubuntu=$(lsb_release -a | grep 'Release:' | awk '{print $2}' | sed 's/\./ /' | awk '{print $1}')
-echo "=========================="
-echo "Detected Ubuntu version $ubuntu"
+# Install Python libraries required in prod
+python3 -m pip install --no-cache-dir --requirement "$project_dir/requirements.txt"
+
 python3 --version
