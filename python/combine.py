@@ -1,5 +1,4 @@
 import time
-import shutil
 from pathlib import Path
 import argparse
 import multiprocessing
@@ -241,8 +240,9 @@ def extract_images_as_pillow_from_video(video):  # video: path to video file
             raise RuntimeError('Unable to open ' + video)
         pillow_images = list()
         frame_count = int(vc.get(cv2.CAP_PROP_FRAME_COUNT)) - 1
-        for i in range(frame_count):
-            _, numpy_ndarray = vc.read()
+        for _ in range(frame_count):
+            success, numpy_ndarray = vc.read()
+            assert success
             pillow_images.append(numpy_ndarray_to_pillow_image(numpy_ndarray))
         return pillow_images
     finally:
