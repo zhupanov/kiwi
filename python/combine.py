@@ -47,18 +47,18 @@ def partition_into_groups(file_names: List[pathlib.Path]) -> List[List[pathlib.P
 # Processing a Group ======================================================================
 
 
-def save(image: Image, base: pathlib.Path, stem: str, kind: str, first_path=None) -> None:
+def save(image: Image, base: pathlib.Path, stem: str, kind: str, first_path: pathlib.Path = None) -> None:
     out_path = base.joinpath(stem + '_' + kind + '.JPG')
     ImageOps.autocontrast(image, cutoff=0.1).save(out_path)
     if first_path is not None:
         piexif.transplant(str(first_path), str(out_path))  # use EXIF from first_path image
 
 
-def save_mono(image: Image, base: pathlib.Path, stem: str, kind: str, first_path) -> None:
+def save_mono(image: Image, base: pathlib.Path, stem: str, kind: str, first_path: pathlib.Path) -> None:
     save(ImageOps.grayscale(image), base, stem, kind + '_bw', first_path)
 
 
-def save_color_and_mono(image: Image, base: pathlib.Path, stem: str, kind: str, first_path) -> None:
+def save_color_and_mono(image: Image, base: pathlib.Path, stem: str, kind: str, first_path: pathlib.Path) -> None:
     save(image, base, stem, kind, first_path)
     save_mono(image, base, stem, kind, first_path)
 
@@ -99,6 +99,128 @@ def gen_usm(image: Image, percent: int, radius: int, threshold: int, iterations:
     return result
 
 
+def gen_and_save_basic(first_path: pathlib.Path,
+                       stem: str,
+                       first: Image,
+                       next_group_first: Image,
+                       output_dirs: Dict[str, pathlib.Path]) -> None:
+    first_images: List[Image] = [first, next_group_first]
+    average2: Image = gen_average(first_images)
+    darker2: Image = gen_darker(first_images)
+    lighter2: Image = gen_lighter(first_images)
+    difference2: Image = ImageChops.difference(first, next_group_first)
+    subtract2: Image = ImageChops.subtract(first, next_group_first)
+    l_sub_d2: Image = ImageChops.subtract(lighter2, darker2)
+    save(average2, output_dirs['basic'], stem, 'average2', first_path)
+    save(darker2, output_dirs['basic'], stem, 'darker2', first_path)
+    save(lighter2, output_dirs['basic'], stem, 'lighter2', first_path)
+    save(difference2, output_dirs['basic'], stem, 'difference2', first_path)
+    save(subtract2, output_dirs['basic'], stem, 'subtract2', first_path)
+    save(l_sub_d2, output_dirs['basic'], stem, 'l_sub_d2', first_path)
+
+
+def save_sampled_frames(first_path: pathlib.Path,
+                        stem: str,
+                        first: Image,
+                        middle: Image,
+                        last: Image,
+                        output_dirs: Dict[str, pathlib.Path]) -> None:
+    save(first, output_dirs['original'], stem, '1_first', first_path)
+    if middle != first:
+        save(middle, output_dirs['original'], stem, '2_middle', first_path)
+    if last != first:
+        save(last, output_dirs['original'], stem, '3_last', first_path)
+
+
+def gen_and_save_mirror(first_path: pathlib.Path,
+                        stem: str,
+                        first: Image,
+                        middle: Image,
+                        last: Image,
+                        output_dirs: Dict[str, pathlib.Path]) -> None:
+    flipped: Image = ImageOps.flip(last)
+    mirrored: Image = ImageOps.mirror(middle)
+    flipped_and_mirrored: Image = ImageOps.mirror(flipped)
+
+    two_combo: Image = ImageChops.subtract(first, flipped)
+    save(two_combo, output_dirs['mirror'], stem, 'combo_2', first_path)
+
+    three_combo: Image = ImageChops.blend(two_combo, mirrored, 0.33)
+    save(three_combo, output_dirs['mirror'], stem, 'combo_3', first_path)
+
+    four_combo: Image = ImageChops.blend(three_combo, flipped_and_mirrored, 0.25)
+    save(four_combo, output_dirs['mirror'], stem, 'combo_4', first_path)
+
+    four_combo_2: Image = ImageOps.flip(ImageChops.difference(
+        ImageChops.screen(ImageChops.difference(first, mirrored), flipped),
+        flipped_and_mirrored
+    ))
+    save(four_combo_2, output_dirs['mirror'], stem, 'combo_4_2', first_path)
+
+    if len(images) > 1:
+        pairwise_subtract: Image = ImageChops.subtract(
+            ImageChops.blend(first, flipped, 0.5),
+            ImageChops.blend(mirrored, flipped_and_mirrored, 0.5))
+        save(pairwise_subtract, output_dirs['mirror'], stem, 'pairwise_sub', first_path)
+
+        sub_inv: Image = ImageChops.subtract(first, ImageChops.invert(flipped))
+        save(sub_inv, output_dirs['mirror'], stem, 'inv_flip_sub', first_path)
+
+
+def gen_and_save_edge(first_path: pathlib.Path,
+                      stem: str,
+                      first: Image,
+                      output_dirs: Dict[str, pathlib.Path]) -> None:
+    offset: Image = ImageChops.offset(first, 1)
+    edge: Image = ImageChops.subtract(first, offset)
+    offset.close()
+    save(edge, output_dirs['edge'], stem, 'edge_1', first_path)
+
+
+def gen_and_save_usm(first_path: pathlib.Path,
+                     stem: str,
+                     first: Image,
+                     r_diff_g: Image,
+                     output_dirs: Dict[str, pathlib.Path]) -> None:
+    halo_150: Image = gen_haloed(first, 150)
+    radius: int = int(20 * first.width / 1400.0)
+    save(gen_usm(r_diff_g, 500, radius, 1, 5), output_dirs['usm'],
+            stem, 'usm_%s_%d_%03d_%02d_%02d' % ('r_diff_g', 500, radius, 1, 5), first_path)
+    save(gen_usm(halo_150, 500, radius, 1, 5), output_dirs['usm'],
+            stem, 'usm_%s_%d_%03d_%02d_%02d' % ('halo', 500, radius, 1, 5), first_path)
+
+
+def gen_and_save_eval(first_path: pathlib.Path,
+                      stem: str,
+                      first: Image,
+                      darker: Image,
+                      lighter: Image,
+                      subtract: Image,
+                      len_images: int,
+                      output_dirs: Dict[str, pathlib.Path]) -> None:
+    def f1(x: int) -> int:
+        return round((x - 127) * (x - 127) / 64)
+
+    save(Image.eval(first, f1), output_dirs['eval'], stem, 'eval_first_sqr', first_path)
+    if len(images) > 1:
+        save(Image.eval(darker, f1), output_dirs['eval'], stem, 'eval_darker_sqr', first_path)
+        save(Image.eval(lighter, f1), output_dirs['eval'], stem, 'eval_lighter_sqr', first_path)
+        save(Image.eval(subtract, f1), output_dirs['eval'], stem, 'eval_subtract_sqr', first_path)
+
+    def f2(x: int) -> int:
+        if x < 85:
+            return 3 * x
+        if x < 170:
+            return (-3) * (x - 170)
+        return 3 * (x - 170)
+
+    save(Image.eval(first, f2), output_dirs['eval'], stem, 'eval_first_zigzag', first_path)
+    if len_images > 1:
+        save(Image.eval(darker, f2), output_dirs['eval'], stem, 'eval_darker_zigzag', first_path)
+        save(Image.eval(lighter, f2), output_dirs['eval'], stem, 'eval_lighter_zigzag', first_path)
+        save(Image.eval(subtract, f2), output_dirs['eval'], stem, 'eval_subtract_zigzag', first_path)
+
+
 # images: list of Image; next_group_image: Image
 def combine_images(args: argparse.Namespace,
                    images: List[Image],
@@ -110,11 +232,7 @@ def combine_images(args: argparse.Namespace,
     middle: Image = images[len(images) // 2]
     last: Image = images[-1]
 
-    save(first, output_dirs['original'], stem, '1_first', first_path)
-    if middle != first:
-        save(middle, output_dirs['original'], stem, '2_middle', first_path)
-    if last != first:
-        save(last, output_dirs['original'], stem, '3_last', first_path)
+    save_sampled_frames(first_path, stem, first, middle, last, output_dirs)
 
     average: Image = gen_average(images)
     darker: Image = gen_darker(images)
@@ -130,57 +248,14 @@ def combine_images(args: argparse.Namespace,
         save(subtract, output_dirs['basic'], stem, 'subtract', first_path)
         save(l_sub_d, output_dirs['basic'], stem, 'l_sub_d', first_path)
 
-    first_images: List[Image] = [first, next_group_first]
-    average2: Image = gen_average(first_images)
-    darker2: Image = gen_darker(first_images)
-    lighter2: Image = gen_lighter(first_images)
-    difference2: Image = ImageChops.difference(first, next_group_first)
-    subtract2: Image = ImageChops.subtract(first, next_group_first)
-    l_sub_d2: Image = ImageChops.subtract(lighter2, darker2)
     if args.basic:
-        save(average2, output_dirs['basic'], stem, 'average2', first_path)
-        save(darker2, output_dirs['basic'], stem, 'darker2', first_path)
-        save(lighter2, output_dirs['basic'], stem, 'lighter2', first_path)
-        save(difference2, output_dirs['basic'], stem, 'difference2', first_path)
-        save(subtract2, output_dirs['basic'], stem, 'subtract2', first_path)
-        save(l_sub_d2, output_dirs['basic'], stem, 'l_sub_d2', first_path)
+        gen_and_save_basic(first_path, stem, first, next_group_first, output_dirs)
 
     if args.mirror:
-        flipped: Image = ImageOps.flip(last)
-        mirrored: Image = ImageOps.mirror(middle)
-        flipped_and_mirrored: Image = ImageOps.mirror(flipped)
-
-        two_combo: Image = ImageChops.subtract(first, flipped)
-        save(two_combo, output_dirs['mirror'], stem, 'combo_2', first_path)
-
-        three_combo: Image = ImageChops.blend(two_combo, mirrored, 0.33)
-        save(three_combo, output_dirs['mirror'], stem, 'combo_3', first_path)
-
-        four_combo: Image = ImageChops.blend(three_combo, flipped_and_mirrored, 0.25)
-        save(four_combo, output_dirs['mirror'], stem, 'combo_4', first_path)
-
-        four_combo_2: Image = ImageOps.flip(ImageChops.difference(
-            ImageChops.screen(ImageChops.difference(first, mirrored), flipped),
-            flipped_and_mirrored
-        ))
-        save(four_combo_2, output_dirs['mirror'], stem, 'combo_4_2', first_path)
-
-        if len(images) > 1:
-            pairwise_subtract: Image = ImageChops.subtract(
-                ImageChops.blend(first, flipped, 0.5),
-                ImageChops.blend(mirrored, flipped_and_mirrored, 0.5))
-            save(pairwise_subtract, output_dirs['mirror'], stem, 'pairwise_sub', first_path)
-
-            sub_inv: Image = ImageChops.subtract(first, ImageChops.invert(flipped))
-            save(sub_inv, output_dirs['mirror'], stem, 'inv_flip_sub', first_path)
+        gen_and_save_mirror(first_path, stem, first, middle, last, output_dirs)
 
     if args.edge:
-        offset: Image = ImageChops.offset(first, 1)
-        edge: Image = ImageChops.subtract(first, offset)
-        offset.close()
-        save(edge, output_dirs['edge'], stem, 'edge_1', first_path)
-
-    halo_150: Image = gen_haloed(first, 150)
+        gen_and_save_edge(first_path, stem, first, output_dirs)
 
     r, g, _ = first.split()
     r_diff_g: Image = ImageChops.difference(r, g)
@@ -188,34 +263,10 @@ def combine_images(args: argparse.Namespace,
         save(r_diff_g, output_dirs['channels'], stem, 'r_dif_g', first_path)
 
     if args.usm:
-        radius: int = int(20 * first.width / 1400.0)
-        save(gen_usm(r_diff_g, 500, radius, 1, 5), output_dirs['usm'],
-             stem, 'usm_%s_%d_%03d_%02d_%02d' % ('r_diff_g', 500, radius, 1, 5), first_path)
-        save(gen_usm(halo_150, 500, radius, 1, 5), output_dirs['usm'],
-             stem, 'usm_%s_%d_%03d_%02d_%02d' % ('halo', 500, radius, 1, 5), first_path)
+        gen_and_save_usm(first_path, stem, first, r_diff_g, output_dirs)
 
     if args.eval:
-        def f1(x):
-            return round((x - 127) * (x - 127) / 64)
-
-        save(Image.eval(first, f1), output_dirs['eval'], stem, 'eval_first_sqr', first_path)
-        if len(images) > 1:
-            save(Image.eval(darker, f1), output_dirs['eval'], stem, 'eval_darker_sqr', first_path)
-            save(Image.eval(lighter, f1), output_dirs['eval'], stem, 'eval_lighter_sqr', first_path)
-            save(Image.eval(subtract, f1), output_dirs['eval'], stem, 'eval_subtract_sqr', first_path)
-
-        def f2(x):
-            if x < 85:
-                return 3 * x
-            if x < 170:
-                return (-3) * (x - 170)
-            return 3 * (x - 170)
-
-        save(Image.eval(first, f2), output_dirs['eval'], stem, 'eval_first_zigzag', first_path)
-        if len(images) > 1:
-            save(Image.eval(darker, f2), output_dirs['eval'], stem, 'eval_darker_zigzag', first_path)
-            save(Image.eval(lighter, f2), output_dirs['eval'], stem, 'eval_lighter_zigzag', first_path)
-            save(Image.eval(subtract, f2), output_dirs['eval'], stem, 'eval_subtract_zigzag', first_path)
+        gen_and_save_eval(first_path, stem, first, darker, ligher, subtract, len(images), output_dirs)
 
 
 def process_group(i: int,
