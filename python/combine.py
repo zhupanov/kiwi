@@ -2,7 +2,7 @@ import time
 import pathlib
 import argparse
 import multiprocessing
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy
@@ -281,7 +281,7 @@ def combine_images(args: argparse.Namespace,
 def process_group(i: int,
                   groups_list: List[List[pathlib.Path]],
                   args: argparse.Namespace,
-                  output_dirs: Dict[str, pathlib.Path]) -> Tuple[int, int, int, Exception]:
+                  output_dirs: Dict[str, pathlib.Path]) -> Tuple[int, int, int, Optional[Exception]]:
     start: float = time.time()
     group: List[pathlib.Path] = groups_list[i]
     next_group: List[pathlib.Path] = groups_list[i+1] if (i < len(groups_list) - 1) else groups_list[0]
@@ -331,7 +331,7 @@ def extract_first_image_as_pillow_from_video(video: pathlib.Path) -> Image:
 def process_video(i: int,
                   videos: List[pathlib.Path],
                   args: argparse.Namespace,
-                  output_dirs: Dict[str, pathlib.Path]) -> Tuple[int, int, int, Exception]:
+                  output_dirs: Dict[str, pathlib.Path]) -> Tuple[int, int, int, Optional[Exception]]:
     start: float = time.time()
     video: pathlib.Path = videos[i]
     next_video: pathlib.Path = videos[i+1] if i < len(videos) - 1 else videos[0]
@@ -357,7 +357,7 @@ def process_video(i: int,
 # Parallel Processing Machinery =============================================================
 
 
-def report_group(x: Tuple[int, int, int, Exception]) -> None:
+def report_group(x: Tuple[int, int, int, Optional[Exception]]) -> None:
     global group_count
     group_count -= 1
     i, n, duration, e = x
@@ -376,7 +376,7 @@ def process_groups_in_parallel(cores: int,
     pool.join()
 
 
-def report_video(x: Tuple[int, int, int, Exception]) -> None:
+def report_video(x: Tuple[int, int, int, Optional[Exception]]) -> None:
     global videos_count
     videos_count -= 1
     i, n, duration, e = x  # i: video index number; n: video frames count; e: exception (or None)
