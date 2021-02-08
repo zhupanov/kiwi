@@ -137,6 +137,7 @@ def gen_and_save_mirror(first_path: pathlib.Path,
                         first: Image,
                         middle: Image,
                         last: Image,
+                        len_images: int,
                         output_dirs: Dict[str, pathlib.Path]) -> None:
     flipped: Image = ImageOps.flip(last)
     mirrored: Image = ImageOps.mirror(middle)
@@ -157,7 +158,7 @@ def gen_and_save_mirror(first_path: pathlib.Path,
     ))
     save(four_combo_2, output_dirs['mirror'], stem, 'combo_4_2', first_path)
 
-    if len(images) > 1:
+    if len_images > 1:
         pairwise_subtract: Image = ImageChops.subtract(
             ImageChops.blend(first, flipped, 0.5),
             ImageChops.blend(mirrored, flipped_and_mirrored, 0.5))
@@ -202,7 +203,7 @@ def gen_and_save_eval(first_path: pathlib.Path,
         return round((x - 127) * (x - 127) / 64)
 
     save(Image.eval(first, f1), output_dirs['eval'], stem, 'eval_first_sqr', first_path)
-    if len(images) > 1:
+    if len_images > 1:
         save(Image.eval(darker, f1), output_dirs['eval'], stem, 'eval_darker_sqr', first_path)
         save(Image.eval(lighter, f1), output_dirs['eval'], stem, 'eval_lighter_sqr', first_path)
         save(Image.eval(subtract, f1), output_dirs['eval'], stem, 'eval_subtract_sqr', first_path)
@@ -252,7 +253,7 @@ def combine_images(args: argparse.Namespace,
         gen_and_save_basic(first_path, stem, first, next_group_first, output_dirs)
 
     if args.mirror:
-        gen_and_save_mirror(first_path, stem, first, middle, last, output_dirs)
+        gen_and_save_mirror(first_path, stem, first, middle, last, len(images), output_dirs)
 
     if args.edge:
         gen_and_save_edge(first_path, stem, first, output_dirs)
@@ -266,7 +267,7 @@ def combine_images(args: argparse.Namespace,
         gen_and_save_usm(first_path, stem, first, r_diff_g, output_dirs)
 
     if args.eval:
-        gen_and_save_eval(first_path, stem, first, darker, ligher, subtract, len(images), output_dirs)
+        gen_and_save_eval(first_path, stem, first, darker, lighter, subtract, len(images), output_dirs)
 
 
 def process_group(i: int,
