@@ -299,16 +299,16 @@ def process_group(i: int,
 
 
 def numpy_ndarray_to_pillow_image(numpy_ndarray: numpy.ndarray) -> Image:
-    return Image.fromarray(cv2.cvtColor(numpy_ndarray, cv2.COLOR_BGR2RGB))
+    return Image.fromarray(cv2.cvtColor(numpy_ndarray, cv2.COLOR_BGR2RGB))  # pylint: disable=E1101
 
 
 def extract_images_as_pillow_from_video(video: pathlib.Path) -> List[Image.Image]:
-    vc = cv2.VideoCapture(str(video))
+    vc = cv2.VideoCapture(str(video))  # pylint: disable=E1101
     try:
         if not vc.isOpened():
             raise RuntimeError(f'Unable to open {str(video)}')
         pillow_images: List[Image] = list()
-        frame_count: int = int(vc.get(cv2.CAP_PROP_FRAME_COUNT)) - 1
+        frame_count: int = int(vc.get(cv2.CAP_PROP_FRAME_COUNT)) - 1  # pylint: disable=E1101
         for _ in range(frame_count):
             success, numpy_ndarray = vc.read()
             assert success
@@ -319,7 +319,7 @@ def extract_images_as_pillow_from_video(video: pathlib.Path) -> List[Image.Image
 
 
 def extract_first_image_as_pillow_from_video(video: pathlib.Path) -> Image:
-    vc = cv2.VideoCapture(str(video))
+    vc = cv2.VideoCapture(str(video))  # pylint: disable=E1101
     try:
         success, numpy_ndarray = vc.read()
         assert success
