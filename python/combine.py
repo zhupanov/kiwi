@@ -71,7 +71,7 @@ def save_color_and_mono(image: Image, base: pathlib.Path, stem: str, kind: str, 
     save_mono(image, base, stem, kind, first_path)
 
 
-def gen_average(images: List[Image]) -> Image:
+def gen_average(images: List[Image.Image]) -> Image:
     result: Image = images[0]
     for i, image in enumerate(images[1:]):
         alpha: float = 1.0 / float(i+2)
@@ -79,14 +79,14 @@ def gen_average(images: List[Image]) -> Image:
     return result
 
 
-def gen_darker(images: List[Image]) -> Image:
+def gen_darker(images: List[Image.Image]) -> Image:
     result: Image = images[0]
     for image in images[1:]:
         result = ImageChops.darker(result, image)
     return result
 
 
-def gen_lighter(images: List[Image]) -> Image:
+def gen_lighter(images: List[Image.Image]) -> Image:
     result: Image = images[0]
     for image in images[1:]:
         result = ImageChops.lighter(result, image)
@@ -232,7 +232,7 @@ def gen_and_save_eval(first_path: Optional[pathlib.Path],
 
 # images: list of Image; next_group_image: Image
 def combine_images(args: argparse.Namespace,
-                   images: List[Image],
+                   images: List[Image.Image],
                    next_group_first: Image,
                    output_dirs: Dict[str, pathlib.Path],
                    stem: str,
@@ -302,7 +302,7 @@ def numpy_ndarray_to_pillow_image(numpy_ndarray: numpy.ndarray) -> Image:
     return Image.fromarray(cv2.cvtColor(numpy_ndarray, cv2.COLOR_BGR2RGB))
 
 
-def extract_images_as_pillow_from_video(video: pathlib.Path) -> List[Image]:
+def extract_images_as_pillow_from_video(video: pathlib.Path) -> List[Image.Image]:
     vc = cv2.VideoCapture(str(video))
     try:
         if not vc.isOpened():
