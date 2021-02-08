@@ -55,18 +55,18 @@ def partition_into_groups(file_names: List[pathlib.Path]) -> List[List[pathlib.P
 # Processing a Group ======================================================================
 
 
-def save(image: Image, base: pathlib.Path, stem: str, kind: str, first_path: pathlib.Path = None) -> None:
+def save(image: Image, base: pathlib.Path, stem: str, kind: str, first_path: Optional[pathlib.Path] = None) -> None:
     out_path = base.joinpath(stem + '_' + kind + '.JPG')
     ImageOps.autocontrast(image, cutoff=0.1).save(out_path)
     if first_path is not None:
         piexif.transplant(str(first_path), str(out_path))  # use EXIF from first_path image
 
 
-def save_mono(image: Image, base: pathlib.Path, stem: str, kind: str, first_path: pathlib.Path) -> None:
+def save_mono(image: Image, base: pathlib.Path, stem: str, kind: str, first_path: Optional[pathlib.Path]) -> None:
     save(ImageOps.grayscale(image), base, stem, kind + '_bw', first_path)
 
 
-def save_color_and_mono(image: Image, base: pathlib.Path, stem: str, kind: str, first_path: pathlib.Path) -> None:
+def save_color_and_mono(image: Image, base: pathlib.Path, stem: str, kind: str, first_path: Optional[pathlib.Path]) -> None:
     save(image, base, stem, kind, first_path)
     save_mono(image, base, stem, kind, first_path)
 
@@ -107,7 +107,7 @@ def gen_usm(image: Image, percent: int, radius: int, threshold: int, iterations:
     return result
 
 
-def gen_and_save_basic(first_path: pathlib.Path,
+def gen_and_save_basic(first_path: Optional[pathlib.Path],
                        stem: str,
                        first: Image,
                        next_group_first: Image,
@@ -127,7 +127,7 @@ def gen_and_save_basic(first_path: pathlib.Path,
     save(l_sub_d2, output_dirs['basic'], stem, 'l_sub_d2', first_path)
 
 
-def save_sampled_frames(first_path: pathlib.Path,
+def save_sampled_frames(first_path: Optional[pathlib.Path],
                         stem: str,
                         first: Image,
                         middle: Image,
@@ -140,7 +140,7 @@ def save_sampled_frames(first_path: pathlib.Path,
         save(last, output_dirs['original'], stem, '3_last', first_path)
 
 
-def gen_and_save_mirror(first_path: pathlib.Path,
+def gen_and_save_mirror(first_path: Optional[pathlib.Path],
                         stem: str,
                         first: Image,
                         middle: Image,
@@ -176,7 +176,7 @@ def gen_and_save_mirror(first_path: pathlib.Path,
         save(sub_inv, output_dirs['mirror'], stem, 'inv_flip_sub', first_path)
 
 
-def gen_and_save_edge(first_path: pathlib.Path,
+def gen_and_save_edge(first_path: Optional[pathlib.Path],
                       stem: str,
                       first: Image,
                       output_dirs: Dict[str, pathlib.Path]) -> None:
@@ -186,7 +186,7 @@ def gen_and_save_edge(first_path: pathlib.Path,
     save(edge, output_dirs['edge'], stem, 'edge_1', first_path)
 
 
-def gen_and_save_usm(first_path: pathlib.Path,
+def gen_and_save_usm(first_path: Optional[pathlib.Path],
                      stem: str,
                      first: Image,
                      r_diff_g: Image,
@@ -199,7 +199,7 @@ def gen_and_save_usm(first_path: pathlib.Path,
          stem, 'usm_%s_%d_%03d_%02d_%02d' % ('halo', 500, radius, 1, 5), first_path)
 
 
-def gen_and_save_eval(first_path: pathlib.Path,
+def gen_and_save_eval(first_path: Optional[pathlib.Path],
                       stem: str,
                       first: Image,
                       darker: Image,
@@ -236,7 +236,7 @@ def combine_images(args: argparse.Namespace,
                    next_group_first: Image,
                    output_dirs: Dict[str, pathlib.Path],
                    stem: str,
-                   first_path: pathlib.Path = None) -> None:
+                   first_path: Optional[pathlib.Path] = None) -> None:
     first: Image = images[0]
     middle: Image = images[len(images) // 2]
     last: Image = images[-1]
