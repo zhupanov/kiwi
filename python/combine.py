@@ -218,7 +218,10 @@ def combine_images(args: argparse.Namespace,
             save(Image.eval(subtract, f2), output_dirs['eval'], stem, 'eval_subtract_zigzag', first_path)
 
 
-def process_group(i: int, groups_list: List[List[pathlib.Path]], args: pathlib.Path, output_dirs: Dict[str, pathlib.Path]):
+def process_group(i: int,
+                  groups_list: List[List[pathlib.Path]],
+                  args: argparse.Namespace,
+                  output_dirs: Dict[str, pathlib.Path]) -> Tuple[int, int, int, Exception]:
     start: float = time.time()
     group: List[pathlib.Path] = groups_list[i]
     next_group: List[pathlib.Path] = groups_list[i+1] if (i < len(groups_list) - 1) else groups_list[0]
@@ -243,7 +246,7 @@ def extract_images_as_pillow_from_video(video: pathlib.Path) -> List[Image]:
     vc = cv2.VideoCapture(str(video))
     try:
         if not vc.isOpened():
-            raise RuntimeError('Unable to open ' + video)
+            raise RuntimeError(f'Unable to open {str(video)}')
         pillow_images: List[Image] = list()
         frame_count: int = int(vc.get(cv2.CAP_PROP_FRAME_COUNT)) - 1
         for _ in range(frame_count):
@@ -265,7 +268,10 @@ def extract_first_image_as_pillow_from_video(video: pathlib.Path) -> Image:
         vc.release()
 
 
-def process_video(i: int, videos: List[pathlib.Path], args: pathlib.Path, output_dirs: Dict[str, pathlib.Path]):
+def process_video(i: int,
+                  videos: List[pathlib.Path],
+                  args: argparse.Namespace,
+                  output_dirs: Dict[str, pathlib.Path]) -> Tuple[int, int, int, Exception]:
     start: float = time.time()
     video: pathlib.Path = videos[i]
     next_video: pathlib.Path = videos[i+1] if i < len(videos) - 1 else videos[0]
@@ -291,7 +297,7 @@ def process_video(i: int, videos: List[pathlib.Path], args: pathlib.Path, output
 # Parallel Processing Machinery =============================================================
 
 
-def report_group(x: Tuple[int, int, int, Exception]):
+def report_group(x: Tuple[int, int, int, Exception]) -> None:
     global group_count
     group_count -= 1
     i, n, duration, e = x
@@ -319,7 +325,7 @@ def report_video(x: Tuple[int, int, int, Exception]) -> None:
 
 
 def process_videos_in_parallel(cores: int,
-                               videos_list: List[List[pathlib.Path]],
+                               videos_list: List[pathlib.Path],
                                args: argparse.Namespace,
                                output_dirs: Dict[str, pathlib.Path]) -> None:
     pool: multiprocessing.pool.Pool = multiprocessing.Pool(cores)
@@ -395,11 +401,11 @@ def main() -> None:
     if group_count > 0:
         print("Found " + str(len(file_names)) + " files under " + str(base) + " and partitioned them into " +
               str(group_count) + " groups")
-        output_dirs: Dict[str, pathlib.Path] = create_output_dirs(args)
-        print("Requested image classes: " + str(sorted(set(output_dirs.keys()))))
+        group_output_dirs: Dict[str, pathlib.Path] = create_output_dirs(args)
+        print("Requested image classes: " + str(sorted(set(group_output_dirs.keys()))))
         print("Processing using %s slave sub-processes." % cores)
         print('---------------------------------------------------------------------------------------')
-        process_groups_in_parallel(cores, groups_list, args, output_dirs)
+        process_groups_in_parallel(cores, groups_list, args, group_output_dirs)
         print('---------------------------------------------------------------------------------------')
         print("Finished processing " + str(len(file_names)) + " images under " + str(base) + ", partitioned into " +
               str(len(groups_list)) + " groups, using " + str(cores) + " parallel processes.")
@@ -407,14 +413,14 @@ def main() -> None:
         print('Total images processing time: %d seconds.' % round(time.time() - start))
 
     if videos_count > 0:
-        start: float = time.time()
-        output_dirs: Dict[str, pathlib.Path] = create_output_dirs(args)
+        start = time.time()
+        video_output_dirs: Dict[str, pathlib.Path] = create_output_dirs(args)
         print('=======================================================================================')
         print("Found " + str(len(video_names)) + " videos under " + str(base))
-        print("Requested image classes: " + str(sorted(set(output_dirs.keys()))))
+        print("Requested image classes: " + str(sorted(set(video_output_dirs.keys()))))
         print("Processing using %s slave sub-processes." % cores)
         print('---------------------------------------------------------------------------------------')
-        process_videos_in_parallel(cores, video_names, args, output_dirs)
+        process_videos_in_parallel(cores, video_names, args, video_output_dirs)
         print('---------------------------------------------------------------------------------------')
         print("Finished processing " + str(len(video_names)) + " videos under " + str(base) +
               " using " + str(cores) + " parallel processes.")
