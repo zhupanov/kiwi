@@ -4,23 +4,31 @@ import argparse
 import multiprocessing
 from typing import Dict, List, Tuple
 
-
 import cv2
 import numpy
 import piexif
 from PIL import Image, ImageChops, ImageOps, ImageFilter
 
-JPEG_EXTENSIONS = ('.JPEG', '.JPG')  # valid extensions of JPEG images
-VIDEO_EXTENSIONS = ('.MP4', )  # valid extensions of video files
-DELTA = 4  # maximum seconds between consecutive images in the same group
+JPEG_EXTENSIONS = (
+    '.JPEG',
+    '.JPG'
+)  # valid extensions of JPEG images
 
-CLASSES = ('basic',
-           'channels',
-           'edge',
-           'eval',
-           'mirror',
-           'original',
-           'usm',)
+VIDEO_EXTENSIONS = (
+    '.MP4',
+)  # valid extensions of video files
+
+DELTA: float = 4.0  # maximum seconds between consecutive images in the same group
+
+CLASSES = (
+    'basic',
+    'channels',
+    'edge',
+    'eval',
+    'mirror',
+    'original',
+    'usm',
+)
 
 # Grouping ================================================================================
 
@@ -28,7 +36,7 @@ group_count = 0
 videos_count = 0
 
 
-def mod_time(f: pathlib.Path) -> int:
+def mod_time(f: pathlib.Path) -> float:
     return f.lstat().st_mtime
 
 
@@ -186,9 +194,9 @@ def gen_and_save_usm(first_path: pathlib.Path,
     halo_150: Image = gen_haloed(first, 150)
     radius: int = int(20 * first.width / 1400.0)
     save(gen_usm(r_diff_g, 500, radius, 1, 5), output_dirs['usm'],
-            stem, 'usm_%s_%d_%03d_%02d_%02d' % ('r_diff_g', 500, radius, 1, 5), first_path)
+         stem, 'usm_%s_%d_%03d_%02d_%02d' % ('r_diff_g', 500, radius, 1, 5), first_path)
     save(gen_usm(halo_150, 500, radius, 1, 5), output_dirs['usm'],
-            stem, 'usm_%s_%d_%03d_%02d_%02d' % ('halo', 500, radius, 1, 5), first_path)
+         stem, 'usm_%s_%d_%03d_%02d_%02d' % ('halo', 500, radius, 1, 5), first_path)
 
 
 def gen_and_save_eval(first_path: pathlib.Path,
