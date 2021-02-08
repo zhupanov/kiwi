@@ -2,11 +2,13 @@ import time
 import pathlib
 import argparse
 import multiprocessing
-from typing import List
+from typing import List, Tuple
 
-from PIL import Image, ImageChops, ImageOps, ImageFilter
-import piexif
+
 import cv2
+import numpy
+import piexif
+from PIL import Image, ImageChops, ImageOps, ImageFilter
 
 JPEG_EXTENSIONS = ('.JPEG', '.JPG')  # valid extensions of JPEG images
 VIDEO_EXTENSIONS = ('.MP4', )  # valid extensions of video files
@@ -31,77 +33,82 @@ def mod_time(f: str) -> int:
 
 
 def partition_into_groups(file_names: List[pathlib.Path]) -> List[List[pathlib.Path]]:
-    groups: List[List[pathlib.Path]] = [[file_names[0]]]
+    groups_list: List[List[pathlib.Path]] = [[file_names[0]]]
     current_group: int = 0
     for file in file_names[1:]:
-        if abs(mod_time(file) - mod_time(groups[current_group][-1])) <= DELTA:
-            groups[current_group].append(file)
+        if abs(mod_time(file) - mod_time(groups_list[current_group][-1])) <= DELTA:
+            groups_list[current_group].append(file)
         else:
             current_group += 1
-            groups.append([file])
-    return groups
+            groups_list.append([file])
+    return groups_list
 
 
 # Processing a Group ======================================================================
 
 
-def save(image: PIL.Image, base: str, stem: str, kind: str, first_path=None) -> None:
+def save(image: Image, base: pathlib.Path, stem: str, kind: str, first_path=None) -> None:
     out_path = base.joinpath(stem + '_' + kind + '.JPG')
     ImageOps.autocontrast(image, cutoff=0.1).save(out_path)
     if first_path is not None:
         piexif.transplant(str(first_path), str(out_path))  # use EXIF from first_path image
 
 
-def save_mono(image: PIL.Image, base: str, stem: str, kind: str, first_path) -> None:
+def save_mono(image: Image, base: pathlib.Path, stem: str, kind: str, first_path) -> None:
     save(ImageOps.grayscale(image), base, stem, kind + '_bw', first_path)
 
 
-def save_color_and_mono(image: PIL.Image, base: str, stem: str, kind: str, first_path) -> None:
+def save_color_and_mono(image: Image, base: pathlib.Path, stem: str, kind: str, first_path) -> None:
     save(image, base, stem, kind, first_path)
     save_mono(image, base, stem, kind, first_path)
 
 
-def gen_average(images: List[PIL.Image]) -> PIL.Image:
-    result: PIL.Image = images[0]
+def gen_average(images: List[Image]) -> Image:
+    result: Image = images[0]
     for i, image in enumerate(images[1:]):
         alpha: float = 1.0 / float(i+2)
         result = ImageChops.blend(result, image, alpha)
     return result
 
 
-def gen_darker(images: List[PIL.Image]) -> PIL.Image:
-    result: PIL.Image = images[0]
+def gen_darker(images: List[Image]) -> Image:
+    result: Image = images[0]
     for image in images[1:]:
         result = ImageChops.darker(result, image)
     return result
 
 
-def gen_lighter(images: List[PIL.Image]) -> PIL.Image:
-    result: PIL.Image = images[0]
+def gen_lighter(images: List[Image]) -> Image:
+    result: Image = images[0]
     for image in images[1:]:
         result = ImageChops.lighter(result, image)
     return result
 
 
-def gen_haloed(image: PIL.Image, radius: int) -> PIL.Image:
-    blurred: PIL.Image = image.filter(ImageFilter.GaussianBlur(radius))
-    result: PIL.Image = ImageChops.subtract(image, blurred)
+def gen_haloed(image: Image, radius: int) -> Image:
+    blurred: Image = image.filter(ImageFilter.GaussianBlur(radius))
+    result: Image = ImageChops.subtract(image, blurred)
     blurred.close()
     return result
 
 
-def gen_usm(image, percent: int, radius: int, threshold: int, iterations: int) -> PIL.Image:
-    result: PIL.Image = image
+def gen_usm(image: Image, percent: int, radius: int, threshold: int, iterations: int) -> Image:
+    result: Image = image
     for _ in range(iterations):
         result = result.filter(ImageFilter.UnsharpMask(percent=percent, radius=radius, threshold=threshold))
     return result
 
 
-# images: list of PIL.Image; next_group_image: PIL.Image
-def combine_images(args, images: List[PIL.Image], next_group_first: PIL.Image, output_dirs: List[str], stem: str, first_path=None) -> None:
-    first: PIL.Image = images[0]
-    middle: PIL.Image = images[len(images) // 2]
-    last: PIL.Image = images[-1]
+# images: list of Image; next_group_image: Image
+def combine_images(args: argparse.Namespace,
+                   images: List[Image],
+                   next_group_first: Image,
+                   output_dirs: Dict[str, pathlib.Path],
+                   stem: str,
+                   first_path: pathlib.Path = None) -> None:
+    first: Image = images[0]
+    middle: Image = images[len(images) // 2]
+    last: Image = images[-1]
 
     save(first, output_dirs['original'], stem, '1_first', first_path)
     if middle != first:
@@ -109,12 +116,12 @@ def combine_images(args, images: List[PIL.Image], next_group_first: PIL.Image, o
     if last != first:
         save(last, output_dirs['original'], stem, '3_last', first_path)
 
-    average = gen_average(images)
-    darker = gen_darker(images)
-    lighter = gen_lighter(images)
-    difference = ImageChops.difference(first, last)
-    subtract = ImageChops.subtract(first, last)
-    l_sub_d = ImageChops.subtract(lighter, darker)
+    average: Image = gen_average(images)
+    darker: Image = gen_darker(images)
+    lighter: Image = gen_lighter(images)
+    difference: Image = ImageChops.difference(first, last)
+    subtract: Image = ImageChops.subtract(first, last)
+    l_sub_d: Image = ImageChops.subtract(lighter, darker)
     if args.basic and len(images) > 1:
         save(average, output_dirs['basic'], stem, 'average', first_path)
         save(darker, output_dirs['basic'], stem, 'darker', first_path)
@@ -123,13 +130,13 @@ def combine_images(args, images: List[PIL.Image], next_group_first: PIL.Image, o
         save(subtract, output_dirs['basic'], stem, 'subtract', first_path)
         save(l_sub_d, output_dirs['basic'], stem, 'l_sub_d', first_path)
 
-    first_images = [first, next_group_first]
-    average2 = gen_average(first_images)
-    darker2 = gen_darker(first_images)
-    lighter2 = gen_lighter(first_images)
-    difference2 = ImageChops.difference(first, next_group_first)
-    subtract2 = ImageChops.subtract(first, next_group_first)
-    l_sub_d2 = ImageChops.subtract(lighter2, darker2)
+    first_images: List[Image] = [first, next_group_first]
+    average2: Image = gen_average(first_images)
+    darker2: Image = gen_darker(first_images)
+    lighter2: Image = gen_lighter(first_images)
+    difference2: Image = ImageChops.difference(first, next_group_first)
+    subtract2: Image = ImageChops.subtract(first, next_group_first)
+    l_sub_d2: Image = ImageChops.subtract(lighter2, darker2)
     if args.basic:
         save(average2, output_dirs['basic'], stem, 'average2', first_path)
         save(darker2, output_dirs['basic'], stem, 'darker2', first_path)
@@ -139,49 +146,49 @@ def combine_images(args, images: List[PIL.Image], next_group_first: PIL.Image, o
         save(l_sub_d2, output_dirs['basic'], stem, 'l_sub_d2', first_path)
 
     if args.mirror:
-        flipped = ImageOps.flip(last)
-        mirrored = ImageOps.mirror(middle)
-        flipped_and_mirrored = ImageOps.mirror(flipped)
+        flipped: Image = ImageOps.flip(last)
+        mirrored: Image = ImageOps.mirror(middle)
+        flipped_and_mirrored: Image = ImageOps.mirror(flipped)
 
-        two_combo = ImageChops.subtract(first, flipped)
+        two_combo: Image = ImageChops.subtract(first, flipped)
         save(two_combo, output_dirs['mirror'], stem, 'combo_2', first_path)
 
-        three_combo = ImageChops.blend(two_combo, mirrored, 0.33)
+        three_combo: Image = ImageChops.blend(two_combo, mirrored, 0.33)
         save(three_combo, output_dirs['mirror'], stem, 'combo_3', first_path)
 
-        four_combo = ImageChops.blend(three_combo, flipped_and_mirrored, 0.25)
+        four_combo: Image = ImageChops.blend(three_combo, flipped_and_mirrored, 0.25)
         save(four_combo, output_dirs['mirror'], stem, 'combo_4', first_path)
 
-        four_combo_2 = ImageOps.flip(ImageChops.difference(
+        four_combo_2: Image = ImageOps.flip(ImageChops.difference(
             ImageChops.screen(ImageChops.difference(first, mirrored), flipped),
             flipped_and_mirrored
         ))
         save(four_combo_2, output_dirs['mirror'], stem, 'combo_4_2', first_path)
 
         if len(images) > 1:
-            pairwise_subtract = ImageChops.subtract(
+            pairwise_subtract: Image = ImageChops.subtract(
                 ImageChops.blend(first, flipped, 0.5),
                 ImageChops.blend(mirrored, flipped_and_mirrored, 0.5))
             save(pairwise_subtract, output_dirs['mirror'], stem, 'pairwise_sub', first_path)
 
-            sub_inv = ImageChops.subtract(first, ImageChops.invert(flipped))
+            sub_inv: Image = ImageChops.subtract(first, ImageChops.invert(flipped))
             save(sub_inv, output_dirs['mirror'], stem, 'inv_flip_sub', first_path)
 
     if args.edge:
-        offset = ImageChops.offset(first, 1)
-        edge = ImageChops.subtract(first, offset)
+        offset: Image = ImageChops.offset(first, 1)
+        edge: Image = ImageChops.subtract(first, offset)
         offset.close()
         save(edge, output_dirs['edge'], stem, 'edge_1', first_path)
 
-    halo_150 = gen_haloed(first, 150)
+    halo_150: Image = gen_haloed(first, 150)
 
     r, g, _ = first.split()
-    r_diff_g = ImageChops.difference(r, g)
+    r_diff_g: Image = ImageChops.difference(r, g)
     if args.channels:
         save(r_diff_g, output_dirs['channels'], stem, 'r_dif_g', first_path)
 
     if args.usm:
-        radius = int(20 * first.width / 1400.0)
+        radius: int = int(20 * first.width / 1400.0)
         save(gen_usm(r_diff_g, 500, radius, 1, 5), output_dirs['usm'],
              stem, 'usm_%s_%d_%03d_%02d_%02d' % ('r_diff_g', 500, radius, 1, 5), first_path)
         save(gen_usm(halo_150, 500, radius, 1, 5), output_dirs['usm'],
@@ -211,11 +218,10 @@ def combine_images(args, images: List[PIL.Image], next_group_first: PIL.Image, o
             save(Image.eval(subtract, f2), output_dirs['eval'], stem, 'eval_subtract_zigzag', first_path)
 
 
-def process_group(i, groups, args, output_dirs):
-    start = time.time()
-    group = groups[i]
-    next_group = groups[i+1] if (i < len(groups) - 1) else groups[0]
-
+def process_group(i: int, groups_list: List[List[pathlib.Path]], args: pathlib.Path, output_dirs: Dict[str, pathlib.Path]):
+    start: float = time.time()
+    group: List[pathlib.Path] = groups_list[i]
+    next_group: List[pathlib.Path] = groups_list[i+1] if (i < len(groups_list) - 1) else groups_list[0]
     try:
         combine_images(
             args=args,
@@ -224,24 +230,22 @@ def process_group(i, groups, args, output_dirs):
             output_dirs=output_dirs,
             stem=group[0].stem,
             first_path=group[0])
-
     except (ValueError, Exception) as e:  # pylint: disable=W0703
         return i, len(group), round(time.time() - start), e
-
     return i, len(group), round(time.time() - start), None
 
 
-def numpy_ndarray_to_pillow_image(numpy_ndarray):
+def numpy_ndarray_to_pillow_image(numpy_ndarray: numpy.ndarray) -> Image:
     return Image.fromarray(cv2.cvtColor(numpy_ndarray, cv2.COLOR_BGR2RGB))
 
 
-def extract_images_as_pillow_from_video(video):  # video: path to video file
+def extract_images_as_pillow_from_video(video: pathlib.Path) -> List[Image]:
     vc = cv2.VideoCapture(str(video))
     try:
         if not vc.isOpened():
             raise RuntimeError('Unable to open ' + video)
-        pillow_images = list()
-        frame_count = int(vc.get(cv2.CAP_PROP_FRAME_COUNT)) - 1
+        pillow_images: List[Image] = list()
+        frame_count: int = int(vc.get(cv2.CAP_PROP_FRAME_COUNT)) - 1
         for _ in range(frame_count):
             success, numpy_ndarray = vc.read()
             assert success
@@ -251,7 +255,7 @@ def extract_images_as_pillow_from_video(video):  # video: path to video file
         vc.release()
 
 
-def extract_first_image_as_pillow_from_video(video):  # video: path to video file
+def extract_first_image_as_pillow_from_video(video: pathlib.Path) -> Image:
     vc = cv2.VideoCapture(str(video))
     try:
         success, numpy_ndarray = vc.read()
@@ -261,10 +265,10 @@ def extract_first_image_as_pillow_from_video(video):  # video: path to video fil
         vc.release()
 
 
-def process_video(i, videos, args, output_dirs):
-    start = time.time()
-    video = videos[i]
-    next_video = videos[i+1] if (i < len(videos) - 1) else videos[0]
+def process_video(i: int, videos: List[pathlib.Path], args: pathlib.Path, output_dirs: Dict[str, pathlib.Path]):
+    start: float = time.time()
+    video: pathlib.Path = videos[i]
+    next_video: pathlib.Path = videos[i+1] if i < len(videos) - 1 else videos[0]
     images = list()
     try:
         images = extract_images_as_pillow_from_video(video)
@@ -287,23 +291,26 @@ def process_video(i, videos, args, output_dirs):
 # Parallel Processing Machinery =============================================================
 
 
-def report_group(x):
+def report_group(x: Tuple[int, int, int, Exception]):
     global group_count
     group_count -= 1
-    i, n, duration, e = x  # i: group index number; n: group size; e: exception (or None)
-    print('Processed group %3d of size %2d in %2d seconds: %s;  remaining groups count: %d' %
-          (i, n, duration, 'SUCCESS' if not e else str(e), group_count))
+    i, n, duration, e = x
+    print(f'Processed group {i:3d} of size {n:2d} in {duration:2d} seconds: {"SUCCESS" if not e else str(e)};  '
+          f'remaining groups count: {group_count}')
 
 
-def process_groups_in_parallel(cores: int, groups_list: List[List[pathlib.Path]], args: argparse.Namespace, output_dirs: Dict[str, pathlib.Path]) -> None:
-    pool = multiprocessing.Pool(cores)
+def process_groups_in_parallel(cores: int,
+                               groups_list: List[List[pathlib.Path]],
+                               args: argspathlib.Path,
+                               output_dirs: Dict[str, pathlib.Path]) -> None:
+    pool: multiprocessing.pool.Pool = multiprocessing.Pool(cores)
     for i in range(len(groups_list)):
-        pool.apply_async(process_group, (i, groups, args, output_dirs), callback=report_group)
+        pool.apply_async(process_group, (i, groups_list, args, output_dirs), callback=report_group)
     pool.close()
     pool.join()
 
 
-def report_video(x):
+def report_video(x: Tuple[int, int, int, Exception]) -> None:
     global videos_count
     videos_count -= 1
     i, n, duration, e = x  # i: video index number; n: video frames count; e: exception (or None)
@@ -311,8 +318,11 @@ def report_video(x):
           (i, n, duration, 'SUCCESS' if not e else str(e), videos_count))
 
 
-def process_videos_in_parallel(cores, videos_list, args, output_dirs):
-    pool = multiprocessing.Pool(cores)
+def process_videos_in_parallel(cores: int,
+                               videos_list: List[List[pathlib.Path]],
+                               argsargspathlib.Path,
+                               output_dirs: Dict[str, pathlib.Path]) -> None:
+    pool: multiprocessing.pool.Pool = multiprocessing.Pool(cores)
     for i in range(len(videos_list)):
         pool.apply_async(process_video, (i, videos_list, args, output_dirs), callback=report_video)
     pool.close()
@@ -323,7 +333,8 @@ def process_videos_in_parallel(cores, videos_list, args, output_dirs):
 
 
 def parse_args() -> argparse.Namespace:
-    parser: argparse.ArgumentParser = argparse.ArgumentParser(description='Combine groups of images for Multiple Exposure techniques.')
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(
+        description='Combine groups of images for Multiple Exposure techniques.')
     parser.add_argument('-i', '--in', dest='input_dir', action='store', required=True,
                         help='root directory containing input groups of images')
     parser.add_argument('-o', '--out', dest='output_dir', action='store', required=True,
@@ -367,15 +378,17 @@ def create_output_dirs(args: argparse.Namespace) -> Dict[str, pathlib.Path]:
 # Main ======================================================================================
 
 
-if __name__ == '__main__':
+def main() -> None:
     start: float = time.time()
     args: argparse.Namespace = parse_args()
     base = pathlib.Path(args.input_dir)
     file_names: List[pathlib.Path] = [pth for pth in base.glob('**/*.*') if pth.is_file() and pth.suffix.upper() in JPEG_EXTENSIONS]
     video_names: List[pathlib.Path] = [pth for pth in base.glob('**/*.*') if pth.is_file() and pth.suffix.upper() in VIDEO_EXTENSIONS]
-    groups: List[List[pathlib.Path]] = partition_into_groups(file_names) if len(file_names) > 0 else list()
-    group_count: int = len(groups)
-    videos_count: int = len(video_names)
+    groups_list: List[List[pathlib.Path]] = partition_into_groups(file_names) if len(file_names) > 0 else list()
+    global group_count
+    group_count = len(groups_list)
+    global videos_count
+    videos_count = len(video_names)
     cores: int = multiprocessing.cpu_count() // 2
     if group_count > 0:
         print("Found " + str(len(file_names)) + " files under " + str(base) + " and partitioned them into " +
@@ -384,10 +397,10 @@ if __name__ == '__main__':
         print("Requested image classes: " + str(sorted(set(output_dirs.keys()))))
         print("Processing using %s slave sub-processes." % cores)
         print('---------------------------------------------------------------------------------------')
-        process_groups_in_parallel(cores, groups, args, output_dirs)
+        process_groups_in_parallel(cores, groups_list, args, output_dirs)
         print('---------------------------------------------------------------------------------------')
         print("Finished processing " + str(len(file_names)) + " images under " + str(base) + ", partitioned into " +
-              str(len(groups)) + " groups, using " + str(cores) + " parallel processes.")
+              str(len(groups_list)) + " groups, using " + str(cores) + " parallel processes.")
         print("Results saved to " + args.output_dir)
         print('Total images processing time: %d seconds.' % round(time.time() - start))
 
@@ -408,3 +421,7 @@ if __name__ == '__main__':
 
     if group_count == 0 and videos_count == 0:
         print('Failed to find images or videos under %s.  Terminating...' % str(base))
+
+
+if __name__ == '__main__':
+    main()
