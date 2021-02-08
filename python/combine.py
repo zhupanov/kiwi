@@ -2,7 +2,7 @@ import time
 import pathlib
 import argparse
 import multiprocessing
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 
 import cv2
@@ -28,7 +28,7 @@ group_count = 0
 videos_count = 0
 
 
-def mod_time(f: str) -> int:
+def mod_time(f: pathlib.Path) -> int:
     return f.lstat().st_mtime
 
 
@@ -382,8 +382,10 @@ def main() -> None:
     start: float = time.time()
     args: argparse.Namespace = parse_args()
     base = pathlib.Path(args.input_dir)
-    file_names: List[pathlib.Path] = [pth for pth in base.glob('**/*.*') if pth.is_file() and pth.suffix.upper() in JPEG_EXTENSIONS]
-    video_names: List[pathlib.Path] = [pth for pth in base.glob('**/*.*') if pth.is_file() and pth.suffix.upper() in VIDEO_EXTENSIONS]
+    file_names: List[pathlib.Path] = [
+        pth for pth in base.glob('**/*.*') if pth.is_file() and pth.suffix.upper() in JPEG_EXTENSIONS]
+    video_names: List[pathlib.Path] = [
+        pth for pth in base.glob('**/*.*') if pth.is_file() and pth.suffix.upper() in VIDEO_EXTENSIONS]
     groups_list: List[List[pathlib.Path]] = partition_into_groups(file_names) if len(file_names) > 0 else list()
     global group_count
     group_count = len(groups_list)
