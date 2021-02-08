@@ -301,7 +301,7 @@ def report_group(x: Tuple[int, int, int, Exception]):
 
 def process_groups_in_parallel(cores: int,
                                groups_list: List[List[pathlib.Path]],
-                               args: argspathlib.Path,
+                               args: argparse.Namespace,
                                output_dirs: Dict[str, pathlib.Path]) -> None:
     pool: multiprocessing.pool.Pool = multiprocessing.Pool(cores)
     for i in range(len(groups_list)):
@@ -320,7 +320,7 @@ def report_video(x: Tuple[int, int, int, Exception]) -> None:
 
 def process_videos_in_parallel(cores: int,
                                videos_list: List[List[pathlib.Path]],
-                               argsargspathlib.Path,
+                               args: argparse.Namespace,
                                output_dirs: Dict[str, pathlib.Path]) -> None:
     pool: multiprocessing.pool.Pool = multiprocessing.Pool(cores)
     for i in range(len(videos_list)):
